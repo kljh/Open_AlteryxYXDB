@@ -60,6 +60,28 @@ void WriteSampleFile(const wchar_t *pFile)
 	fileOut.Close();
 }
 
+void replace_all(std::string& str, const std::string& search_str, const std::string& replace_by_str) {
+	size_t pos = 0;
+	while ((pos = str.find(search_str, pos)) != std::string::npos) {
+		str.replace(pos, search_str.length(), replace_by_str);
+		pos += replace_by_str.length();
+	}
+}
+
+std::string rfc4180_csv_escape(const char *cstr) {
+	std::string str(cstr);
+	if ( !str.empty()
+		&& str.find(",")  == std::string::npos
+		&& str.find("\n") == std::string::npos
+		&& str.find("\"") == std::string::npos)
+		return str;
+
+	// in case text contains commas, new line or double quote (and also for empty text), 
+	// then we put text between double quotes (and repeat double quotes within).
+	replace_all(str, "\"", "\"\"");
+	return "\"" + str + "\"";
+}
+
 void ReadSampleFile(const wchar_t *pFile, const wchar_t *pCsvOutFile)
 {
 	Alteryx::OpenYXDB::Open_AlteryxYXDB file;
@@ -86,7 +108,7 @@ void ReadSampleFile(const wchar_t *pFile, const wchar_t *pCsvOutFile)
 			if (x != 0)
 				out << ",";
 
-			out << SRC::ConvertToAString(pField->GetFieldName().c_str());
+			out << rfc4180_csv_escape(SRC::ConvertToAString(pField->GetFieldName().c_str()));
 		}
 	}
 	out << "\n";
@@ -116,7 +138,7 @@ void ReadSampleFile(const wchar_t *pFile, const wchar_t *pCsvOutFile)
 				else
 				{
 					// you could (and probably should) as for GetAsWString to get the unicode value
-					out << pField->GetAsAString(pRec).value.pValue;
+					out << rfc4180_csv_escape(pField->GetAsAString(pRec).value.pValue);
 				}
 			}
 		}
@@ -134,7 +156,9 @@ int _tmain(int argc, _TCHAR* argv[])
 		}
 		else
 		{
-			std::cout << "Usage: " << argv[0] << " <yxdb input file>  <csv output file>.\n";
+			std::wstring wexe(argv[0]);
+			std::string  exe(wexe.begin(), wexe.end());
+			std::cout << "Usage: " << exe << " <yxdb input file>  <csv output file>.\n";
 		}
 
 		/*
