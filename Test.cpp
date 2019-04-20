@@ -2,6 +2,7 @@
 #include "stdafx.h"
 #include "Open_AlteryxYXDB.h"
 #include <iostream>
+#include <fstream>
 #include <random>
 
 // only used for generating sample data
@@ -59,23 +60,36 @@ void WriteSampleFile(const wchar_t *pFile)
 	fileOut.Close();
 }
 
-void ReadSampleFile(const wchar_t *pFile)
+void ReadSampleFile(const wchar_t *pFile, const wchar_t *pCsvOutFile)
 {
 	Alteryx::OpenYXDB::Open_AlteryxYXDB file;
 	file.Open(pFile);
 
+	std::ofstream fout;
+	if (pCsvOutFile) fout.open(pCsvOutFile, std::ofstream::out);
+
+	std::ostream& out = pCsvOutFile ? fout : std::cout;
+
+	// precision for floating point numbers (default is 6)
+	out.precision(15);
+
 	// you can ask about how many fields are in the file, what are there names and types, etc...
 	for (unsigned x = 0; x < file.m_recordInfo.NumFields(); ++x)
 	{
-		if (x != 0)
-			std::cout << ",";
-
 		// the FieldBase object has all kinds of information about the field
 		// it will also help us (later) get a specific value from a record
 		const SRC::FieldBase * pField = file.m_recordInfo[x];
-		std::cout << SRC::ConvertToAString(pField->GetFieldName().c_str());
+
+		// binary fields are not implicitly convertable to strings
+		if (!IsBinary(pField->m_ft))
+		{
+			if (x != 0)
+				out << ",";
+
+			out << SRC::ConvertToAString(pField->GetFieldName().c_str());
+		}
 	}
-	std::cout << "\n";
+	out << "\n";
 
 	// read 1 record at a time from the YXDB.  When the file as read past
 	// the last record, ReadRecord will return nullptr
@@ -93,13 +107,20 @@ void ReadSampleFile(const wchar_t *pFile)
 			if (!IsBinary(pField->m_ft))
 			{
 				if (x != 0)
-					std::cout << ",";
+					out << ",";
 
-				// you could (and probably should) as for GetAsWString to get the unicode value
-				std::cout << pField->GetAsAString(pRec).value.pValue;
+				if (!IsFloat(pField->m_ft))
+				{
+					out << pField->GetAsDouble(pRec).value;
+				}
+				else
+				{
+					// you could (and probably should) as for GetAsWString to get the unicode value
+					out << pField->GetAsAString(pRec).value.pValue;
+				}
 			}
 		}
-		std::cout << "\n";
+		out << "\n";
 	}
 }
 int _tmain(int argc, _TCHAR* argv[])
@@ -107,8 +128,19 @@ int _tmain(int argc, _TCHAR* argv[])
 	// most of the functions in this library can throw class Error if something goes wrong
 	try
 	{
+		if (argc > 2)
+		{
+			ReadSampleFile(argv[1], argv[2]);
+		}
+		else
+		{
+			std::cout << "Usage: " << argv[0] << " <yxdb input file>  <csv output file>.\n";
+		}
+
+		/*
 		WriteSampleFile(L"temp.yxdb");
 		ReadSampleFile(L"temp.yxdb");
+		*/
 	}
 	catch (SRC::Error e)
 	{
