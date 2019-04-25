@@ -92,24 +92,19 @@ void ReadSampleFile(const wchar_t *pFile, const wchar_t *pCsvOutFile)
 
 	std::ostream& out = pCsvOutFile ? fout : std::cout;
 
-	// precision for floating point numbers (default is 6)
+	// use double precision floating point numbers (default is 6 digits)
 	out.precision(15);
 
 	// you can ask about how many fields are in the file, what are there names and types, etc...
 	for (unsigned x = 0; x < file.m_recordInfo.NumFields(); ++x)
 	{
+		if (x != 0)
+			out << ",";
+
 		// the FieldBase object has all kinds of information about the field
 		// it will also help us (later) get a specific value from a record
 		const SRC::FieldBase * pField = file.m_recordInfo[x];
-
-		// binary fields are not implicitly convertable to strings
-		if (!IsBinary(pField->m_ft))
-		{
-			if (x != 0)
-				out << ",";
-
-			out << rfc4180_csv_escape(SRC::ConvertToAString(pField->GetFieldName().c_str()));
-		}
+		out << rfc4180_csv_escape(SRC::ConvertToAString(pField->GetFieldName().c_str()));
 	}
 	out << "\n";
 
@@ -125,21 +120,22 @@ void ReadSampleFile(const wchar_t *pFile, const wchar_t *pCsvOutFile)
 			// the recordInfo object acts like an array of FieldBase objects
 			const SRC::FieldBase * pField = file.m_recordInfo[x];
 
-			// binary fields are not implicitly convertable to strings
-			if (!IsBinary(pField->m_ft))
-			{
-				if (x != 0)
-					out << ",";
+			if (x != 0)
+				out << ",";
 
-				if (!IsFloat(pField->m_ft))
-				{
-					out << pField->GetAsDouble(pRec).value;
-				}
-				else
-				{
-					// you could (and probably should) as for GetAsWString to get the unicode value
-					out << rfc4180_csv_escape(pField->GetAsAString(pRec).value.pValue);
-				}
+			if (IsBinary(pField->m_ft))
+			{
+				// binary fields are not implicitly convertable to strings
+			}
+			else if (!IsFloat(pField->m_ft))
+			{
+				// floating number with appropriate precision
+				out << pField->GetAsDouble(pRec).value;
+			}
+			else
+			{
+				// you could (and probably should) as for GetAsWString to get the unicode value
+				out << rfc4180_csv_escape(pField->GetAsAString(pRec).value.pValue);
 			}
 		}
 		out << "\n";
