@@ -127,7 +127,7 @@ void ReadSampleFile(const wchar_t *pFile, const wchar_t *pCsvOutFile)
 			{
 				// binary fields are not implicitly convertable to strings
 			}
-			else if (!IsFloat(pField->m_ft))
+			else if (IsFloat(pField->m_ft))
 			{
 				// floating number with appropriate precision
 				out << pField->GetAsDouble(pRec).value;
