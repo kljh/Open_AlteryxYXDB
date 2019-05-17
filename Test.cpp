@@ -98,15 +98,15 @@ static int sqlite_exec_callback(void *NotUsed, int argc, char **argv, char **azC
 	return 0;
 }
 
-int ReadToSQLiteFile(const wchar_t *pFile, const wchar_t *pSQLiteOutFile, const wchar_t *pSQLiteOutTable)
+int ReadToSQLiteFile(const wchar_t *pFile, const wchar_t *pSQLiteOutFile, const wchar_t *pSQLiteOutTable, bool read_blob)
 {
 	Alteryx::OpenYXDB::Open_AlteryxYXDB file;
 	fprintf(stdout, "YXDB path: %S \n", pFile);
 	file.Open(pFile);
 	int numRec(file.GetNumRecords());
 	fprintf(stdout, "YXDB records: #%i\n", numRec);
+	fprintf(stdout, read_blob ? "Include BLOBs\n" : "Ignore BLOBs (pass 'blob' as 4th argument to include)\n");
 	
-
 	sqlite3 *db;
 	char *err = 0;
 	int rc = sqlite3_open16(pSQLiteOutFile, &db);
@@ -129,10 +129,10 @@ int ReadToSQLiteFile(const wchar_t *pFile, const wchar_t *pSQLiteOutFile, const 
 		
 		if (IsBinary(pField->m_ft))
 			create_table_stmt += " BLOB";
-		else if (IsFloat(pField->m_ft))
-			create_table_stmt += " REAL";
 		else if (IsBoolOrInteger(pField->m_ft))
 			create_table_stmt += " INTEGER";
+		else if (IsFloat(pField->m_ft) || IsNumeric(pField->m_ft)) // FixedDecimal is not a Float
+			create_table_stmt += " REAL";
 		else if (IsStringOrDate(pField->m_ft))
 			create_table_stmt += " TEXT";
 
@@ -161,8 +161,7 @@ int ReadToSQLiteFile(const wchar_t *pFile, const wchar_t *pSQLiteOutFile, const 
 	
 	sqlite3_stmt *stmt = nullptr;
 	if (SQLITE_OK != (rc = sqlite3_prepare_v2(db, insert_stmt.c_str(), -1, &stmt, nullptr))) {
-		auto err = sqlite3_errmsg(db);
-		fprintf(stderr, "SQL prepare error %d: %s\n", rc, err);
+		fprintf(stderr, "SQL prepare error %d: %s\n", rc, sqlite3_errmsg(db));
 		return 1;
 	}
 
@@ -182,12 +181,23 @@ int ReadToSQLiteFile(const wchar_t *pFile, const wchar_t *pSQLiteOutFile, const 
 			if (IsBinary(pField->m_ft))
 			{
 				// binary fields are not implicitly convertable to strings
-				rc = sqlite3_bind_null(stmt, pos);
+				if (read_blob) {
+					auto blob = pField->GetAsBlob(pRec);
+					rc = sqlite3_bind_blob(stmt, pos, blob.value.pValue, blob.value.nLength, SQLITE_TRANSIENT);
+				} else {
+					rc = sqlite3_bind_null(stmt, pos);
+				}
 			}
 			else if (IsBoolOrInteger(pField->m_ft))
 			{
-				__int64 i = pField->GetAsInt64(pRec).value;
-				rc = sqlite3_bind_int64(stmt, pos, i);
+				int n = pField->m_nSize;
+				if (n == 8) {
+					__int64 i = pField->GetAsInt64(pRec).value;
+					rc = sqlite3_bind_int64(stmt, pos, i);
+				} else {
+					int i = pField->GetAsInt32(pRec).value;
+					rc = sqlite3_bind_int(stmt, pos, i);
+				}
 			}
 			else if (IsFloat(pField->m_ft) || IsNumeric(pField->m_ft)) // FixedDecimal is not a Float
 			{
@@ -196,8 +206,8 @@ int ReadToSQLiteFile(const wchar_t *pFile, const wchar_t *pSQLiteOutFile, const 
 			}
 			else if (IsStringOrDate(pField->m_ft))
 			{
-				const wchar_t* s = pField->GetAsWString(pRec).value.pValue;
-				rc = sqlite3_bind_text16(stmt, pos, s, -1, SQLITE_TRANSIENT);
+				auto s = pField->GetAsWString(pRec);
+				rc = sqlite3_bind_text16(stmt, pos, s.value.pValue, -1, SQLITE_TRANSIENT);
 			}
 			else
 			{
@@ -206,21 +216,18 @@ int ReadToSQLiteFile(const wchar_t *pFile, const wchar_t *pSQLiteOutFile, const 
 			}
 
 			if (rc != SQLITE_OK) {
-				auto err = sqlite3_errmsg(db);
-				fprintf(stderr, "SQL bind error %d: %s\n", rc, err);
+				fprintf(stderr, "SQL bind error %d: %s\n", rc, sqlite3_errmsg(db));
 				return 1;
 			}
 		}
 
 		rc = sqlite3_step(stmt);
 		if (SQLITE_DONE != rc) {
-			auto err = sqlite3_errmsg(db);
-			printf("SQLite step error %d: %s\n", rc, err);
+			fprintf(stderr, "SQLite step error %d: %s\n", rc, sqlite3_errmsg(db));
 			return 1;
 		}
 		if (SQLITE_OK != (rc = sqlite3_reset(stmt))) {
-			auto err = sqlite3_errmsg(db);
-			fprintf(stderr, "SQL prepare error %d: %s\n", rc, err);
+			fprintf(stderr, "SQL prepare error %d: %s\n", rc, sqlite3_errmsg(db));
 			return 1;
 		}
 	}
@@ -233,6 +240,8 @@ int ReadToSQLiteFile(const wchar_t *pFile, const wchar_t *pSQLiteOutFile, const 
 
 	if (stmt) sqlite3_finalize(stmt);
 	sqlite3_close(db);
+
+	fprintf(stdout, "record %i / %i.\n", iRec, numRec);
 	return 0;
 }
 
@@ -243,7 +252,8 @@ int _tmain(int argc, _TCHAR* argv[])
 	{
 		if (argc > 3)
 		{
-			ReadToSQLiteFile(argv[1], argv[2], argv[3]);
+			bool read_blob = argc > 4 && std::wstring(argv[4]) == L"blob";
+			ReadToSQLiteFile(argv[1], argv[2], argv[3], read_blob);
 		} 
 		else if (argc > 2)
 		{
@@ -253,7 +263,9 @@ int _tmain(int argc, _TCHAR* argv[])
 		{
 			std::wstring wexe(argv[0]);
 			std::string  exe(wexe.begin(), wexe.end());
-			std::cout << "Usage: " << exe << " <yxdb input file> <.csv or .db/.sqlite output file> <sqlite table name>\n";
+			std::cout 
+				<< "Usage (CSV):    " << exe << " <yxdb input file> <csv output file> \n"
+				<< "Usage (SQLite): " << exe << " <yxdb input file> <sqlite output file> <sqlite table name> [blob] \n\n";
 		}
 	}
 	catch (SRC::Error e)
