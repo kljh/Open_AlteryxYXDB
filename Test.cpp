@@ -130,11 +130,51 @@ int ReadToSQLiteFile(const wchar_t *pFile, const wchar_t *pSQLiteOutFile, const 
 		if (IsBinary(pField->m_ft))
 			create_table_stmt += " BLOB";
 		else if (IsBoolOrInteger(pField->m_ft))
-			create_table_stmt += " INTEGER";
-		else if (IsFloat(pField->m_ft) || IsNumeric(pField->m_ft)) // FixedDecimal is not a Float
-			create_table_stmt += " REAL";
-		else if (IsStringOrDate(pField->m_ft))
-			create_table_stmt += " TEXT";
+		{
+			if (pField->m_ft == SRC::E_FT_Int64)
+				create_table_stmt += " bigint";
+			else if (pField->m_ft == SRC::E_FT_Int32)
+				create_table_stmt += " int";
+			else if (pField->m_ft == SRC::E_FT_Int16)
+				create_table_stmt += " smallint";
+			else if (pField->m_ft == SRC::E_FT_Byte)
+				create_table_stmt += " tinyint";
+			else if (pField->m_ft == SRC::E_FT_Bool)
+				create_table_stmt += " boolean";
+			else 
+				create_table_stmt += " INTEGER"; // affinity
+		}
+		else if (IsFloat(pField->m_ft) || IsNumeric(pField->m_ft)) // FixedDecimal is not included in IsFloat
+		{
+			if (pField->m_ft == SRC::E_FT_Double)
+				create_table_stmt += " double";
+			else if (pField->m_ft == SRC::E_FT_Float)
+				create_table_stmt += " float";
+			else if (pField->m_ft == SRC::E_FT_FixedDecimal)
+				create_table_stmt += " decimal";
+			else
+				create_table_stmt += " REAL"; // affinity
+		}
+		else if (IsString(pField->m_ft))
+		{
+			if (pField->m_ft == SRC::E_FT_V_WString)
+				create_table_stmt += " nvarchar"; // size 2^30-1
+			else if (pField->m_ft == SRC::E_FT_WString)
+				create_table_stmt += " nchar";
+			else if (pField->m_ft == SRC::E_FT_V_String)
+				create_table_stmt += " varchar"; // size 2^31-1
+			else if (pField->m_ft == SRC::E_FT_Byte)
+				create_table_stmt += " char";
+			else
+				create_table_stmt += " TEXT"; // affinity
+		}
+		
+		else if (IsDate(pField->m_ft) && IsTime(pField->m_ft))
+			create_table_stmt += " datetime"; 
+		else if (IsDate(pField->m_ft))
+			create_table_stmt += " date";
+		else if (IsTime(pField->m_ft))
+			create_table_stmt += " time";
 
 		insert_stmt += j==0 ? "?" : ", ?";
 	}

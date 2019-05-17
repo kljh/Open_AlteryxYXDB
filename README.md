@@ -4,7 +4,7 @@
 
 &nbsp;
 
-### Usage:
+## Usage:
 
 - Convert to SQLite database:
 
@@ -17,6 +17,31 @@
 - Convert to CSV:
 
 `` OpenAlteryxYXDB.exe input.yxdb output.csv ``
+
+
+&nbsp;
+
+## Type mapping
+
+
+| YXDB Type | SQLite Type | SQLite affinity |
+| --- | ---: | :--- |
+| V_WString | nvarchar | TEXT |
+| WString | nchar | TEXT |
+| V_String | varchar | TEXT |
+| String | char | TEXT |
+| Int64 | big int | INTEGER |
+| Int32 | int | INTEGER |
+| Int16 | smallint | INTEGER |
+| Byte | tinyint unsigned | INTEGER |
+| Bool | boolean | NUMERIC |
+| Double | double | REAL |
+| Float | float | REAL |
+| FixedDecimal | decimal | NUMERIC |
+| DateTime | datetime | NUMERIC |
+| Date | date | NUMERIC |
+| Time | time | NUMERIC |
+| Blob | blob | BLOB |
 
 
 &nbsp;
