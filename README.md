@@ -1,4 +1,4 @@
-## OpenAlteryxYXDB 
+## OpenAlteryxYXDB
 
 # Convert XYDB files into SQLite databases.
 
@@ -8,11 +8,11 @@
 
 - Convert to SQLite database:
 
-`` OpenAlteryxYXDB.exe input.yxdb output.sqlite table name> ``
+`` OpenAlteryxYXDB.exe input.yxdb output.sqlite table_name ``
 
 - Convert to SQLite database (including binary blobs fields):
 
-`` OpenAlteryxYXDB.exe input.yxdb output.sqlite table name> "blob" ``
+`` OpenAlteryxYXDB.exe input.yxdb output.sqlite table_name "blob" ``
 
 - Convert to CSV:
 
